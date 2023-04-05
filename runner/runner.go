@@ -71,7 +71,7 @@ type Runner struct {
 	hp              *httpx.HTTPX
 	wappalyzer      *wappalyzer.Wappalyze
 	fastdialer      *fastdialer.Dialer
-	scanopts        scanOptions
+	scanopts        ScanOptions
 	hm              *hybrid.HybridMap
 	stats           clistats.StatisticsClient
 	ratelimiter     ratelimit.Limiter
@@ -160,7 +160,7 @@ func New(options *Options) (*Runner, error) {
 		gologger.Fatal().Msgf("Could not create httpx instance: %s\n", err)
 	}
 
-	var scanopts scanOptions
+	var scanopts ScanOptions
 
 	if options.InputRawRequest != "" {
 		var rawRequest []byte
@@ -869,15 +869,37 @@ func (r *Runner) RunEnumeration() {
 	wgoutput.Wait()
 }
 
-func (r *Runner) GetScanOpts() scanOptions {
+func (r *Runner) GetScanOpts() ScanOptions {
 	return r.scanopts
 }
 
-func (r *Runner) Process(t string, wg *sizedwaitgroup.SizedWaitGroup, protocol string, scanopts *scanOptions, output chan Result) {
+func (r *Runner) Process(t string, wg *sizedwaitgroup.SizedWaitGroup, protocol string, scanopts *ScanOptions, output chan Result) {
 	r.process(t, wg, r.hp, protocol, scanopts, output)
 }
 
-func (r *Runner) process(t string, wg *sizedwaitgroup.SizedWaitGroup, hp *httpx.HTTPX, protocol string, scanopts *scanOptions, output chan Result) {
+func (r *Runner) ProcessStandalone(t string, hp *httpx.HTTPX, wg *sizedwaitgroup.SizedWaitGroup, protocol string, scanopts *ScanOptions, output chan Result) {
+	protocols := []string{protocol}
+	if scanopts.NoFallback || protocol == httpx.HTTPandHTTPS {
+		protocols = []string{httpx.HTTPS, httpx.HTTP}
+	}
+
+	for target := range r.targets(hp, stringz.TrimProtocol(t, scanopts.NoFallback || scanopts.NoFallbackScheme)) {
+		for _, method := range scanopts.Methods {
+			for _, prot := range protocols {
+				// sleep for delay time
+				time.Sleep(r.options.Delay)
+				wg.Add()
+				go func(target httpx.Target, method, protocol string) {
+					defer wg.Done()
+					result := r.analyzeStandalone(hp, protocol, target, method, t, scanopts)
+					output <- result
+				}(target, method, prot)
+			}
+		}
+	}
+}
+
+func (r *Runner) process(t string, wg *sizedwaitgroup.SizedWaitGroup, hp *httpx.HTTPX, protocol string, scanopts *ScanOptions, output chan Result) {
 	protocols := []string{protocol}
 	if scanopts.NoFallback || protocol == httpx.HTTPandHTTPS {
 		protocols = []string{httpx.HTTPS, httpx.HTTP}
@@ -1020,7 +1042,7 @@ func (r *Runner) targets(hp *httpx.HTTPX, target string) chan httpx.Target {
 	return results
 }
 
-func (r *Runner) analyze(hp *httpx.HTTPX, protocol string, target httpx.Target, method, origInput string, scanopts *scanOptions) Result {
+func (r *Runner) analyze(hp *httpx.HTTPX, protocol string, target httpx.Target, method, origInput string, scanopts *ScanOptions) Result {
 	origProtocol := protocol
 	if protocol == httpx.HTTPorHTTPS || protocol == httpx.HTTPandHTTPS {
 		protocol = httpx.HTTPS
@@ -1761,7 +1783,7 @@ func (r *Runner) SaveResumeConfig() error {
 }
 
 // JSON the result
-func (r Result) JSON(scanopts *scanOptions) string { //nolint
+func (r Result) JSON(scanopts *ScanOptions) string { //nolint
 	if scanopts != nil && len(r.ResponseBody) > scanopts.MaxResponseBodySizeToSave {
 		r.ResponseBody = r.ResponseBody[:scanopts.MaxResponseBodySizeToSave]
 	}
@@ -1796,7 +1818,7 @@ func (r Result) CSVHeader() string { //nolint
 }
 
 // CSVRow the CSV Row
-func (r Result) CSVRow(scanopts *scanOptions) string { //nolint
+func (r Result) CSVRow(scanopts *ScanOptions) string { //nolint
 	if scanopts != nil && len(r.ResponseBody) > scanopts.MaxResponseBodySizeToSave {
 		r.ResponseBody = r.ResponseBody[:scanopts.MaxResponseBodySizeToSave]
 	}
