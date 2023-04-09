@@ -639,12 +639,12 @@ func (r *Runner) RunEnumeration() {
 		}
 
 		for resp := range output {
-			if resp.err != nil {
+			if resp.Err != nil {
 				// Change the error message if any port value passed explicitly
 				if url, err := r.parseURL(resp.URL); err == nil && url.Port() != "" {
-					resp.err = errors.New(strings.ReplaceAll(resp.err.Error(), "address", "port"))
+					resp.Err = errors.New(strings.ReplaceAll(resp.Err.Error(), "address", "port"))
 				}
-				gologger.Debug().Msgf("Failed '%s': %s\n", resp.URL, resp.err)
+				gologger.Debug().Msgf("Failed '%s': %s\n", resp.URL, resp.Err)
 			}
 			if resp.str == "" {
 				continue
@@ -704,10 +704,10 @@ func (r *Runner) RunEnumeration() {
 			if len(r.options.filterWordsCount) > 0 && slice.IntSliceContains(r.options.filterWordsCount, resp.Words) {
 				continue
 			}
-			if r.options.filterRegex != nil && r.options.filterRegex.MatchString(resp.raw) {
+			if r.options.filterRegex != nil && r.options.filterRegex.MatchString(resp.Raw) {
 				continue
 			}
-			if r.options.OutputFilterString != "" && strings.Contains(strings.ToLower(resp.raw), strings.ToLower(r.options.OutputFilterString)) {
+			if r.options.OutputFilterString != "" && strings.Contains(strings.ToLower(resp.Raw), strings.ToLower(r.options.OutputFilterString)) {
 				continue
 			}
 			if len(r.options.OutputFilterFavicon) > 0 && stringsutil.EqualFoldAny(resp.FavIconMMH3, r.options.OutputFilterFavicon...) {
@@ -719,10 +719,10 @@ func (r *Runner) RunEnumeration() {
 			if len(r.options.matchContentLength) > 0 && !slice.IntSliceContains(r.options.matchContentLength, resp.ContentLength) {
 				continue
 			}
-			if r.options.matchRegex != nil && !r.options.matchRegex.MatchString(resp.raw) {
+			if r.options.matchRegex != nil && !r.options.matchRegex.MatchString(resp.Raw) {
 				continue
 			}
-			if r.options.OutputMatchString != "" && !strings.Contains(strings.ToLower(resp.raw), strings.ToLower(r.options.OutputMatchString)) {
+			if r.options.OutputMatchString != "" && !strings.Contains(strings.ToLower(resp.Raw), strings.ToLower(r.options.OutputMatchString)) {
 				continue
 			}
 			if len(r.options.OutputMatchFavicon) > 0 && !stringsutil.EqualFoldAny(resp.FavIconMMH3, r.options.OutputMatchFavicon...) {
@@ -1054,7 +1054,7 @@ retry:
 	}
 	URL, err := r.parseURL(target.Host)
 	if err != nil {
-		return Result{URL: target.Host, Input: origInput, err: err}
+		return Result{URL: target.Host, Input: origInput, Err: err}
 	}
 
 	// check if we have to skip the host:port as a result of a previous failure
@@ -1062,14 +1062,14 @@ retry:
 	if r.options.HostMaxErrors >= 0 && r.HostErrorsCache.Has(hostPort) {
 		numberOfErrors, err := r.HostErrorsCache.GetIFPresent(hostPort)
 		if err == nil && numberOfErrors.(int) >= r.options.HostMaxErrors {
-			return Result{URL: target.Host, err: errors.New("skipping as previously unresponsive")}
+			return Result{URL: target.Host, Err: errors.New("skipping as previously unresponsive")}
 		}
 	}
 
 	// check if the combination host:port should be skipped if belonging to a cdn
 	if r.skipCDNPort(URL.Host, URL.Port()) {
 		gologger.Debug().Msgf("Skipping cdn target: %s:%s\n", URL.Host, URL.Port())
-		return Result{URL: target.Host, Input: origInput, err: errors.New("cdn target only allows ports 80 and 443")}
+		return Result{URL: target.Host, Input: origInput, Err: errors.New("cdn target only allows ports 80 and 443")}
 	}
 
 	URL.Scheme = protocol
@@ -1097,7 +1097,7 @@ retry:
 		req, err = hp.NewRequest(method, URL.String())
 	}
 	if err != nil {
-		return Result{URL: URL.String(), Input: origInput, err: err}
+		return Result{URL: URL.String(), Input: origInput, Err: err}
 	}
 
 	if target.CustomHost != "" {
@@ -1138,7 +1138,7 @@ retry:
 		var errDump error
 		requestDump, errDump = rawhttp.DumpRequestRaw(req.Method, req.URL.String(), reqURI, req.Header, req.Body, rawhttp.DefaultOptions)
 		if errDump != nil {
-			return Result{URL: URL.String(), Input: origInput, err: errDump}
+			return Result{URL: URL.String(), Input: origInput, Err: errDump}
 		}
 	} else {
 		// Create a copy on the fly of the request body
@@ -1149,7 +1149,7 @@ retry:
 		var errDump error
 		requestDump, errDump = httputil.DumpRequestOut(req.Request, true)
 		if errDump != nil {
-			return Result{URL: URL.String(), Input: origInput, err: errDump}
+			return Result{URL: URL.String(), Input: origInput, Err: errDump}
 		}
 		// The original req.Body gets modified indirectly by httputil.DumpRequestOut so we set it again to nil if it was empty
 		// Otherwise redirects like 307/308 would fail (as they require the body to be sent along)
@@ -1161,7 +1161,7 @@ retry:
 	// fix the final output url
 	fullURL := req.URL.String()
 	if parsedURL, errParse := r.parseURL(fullURL); errParse != nil {
-		return Result{URL: URL.String(), Input: origInput, err: errParse}
+		return Result{URL: URL.String(), Input: origInput, Err: errParse}
 	} else {
 		if r.options.Unsafe {
 			parsedURL.Path = reqURI
@@ -1229,9 +1229,9 @@ retry:
 		}
 
 		if r.options.Probe {
-			return Result{URL: URL.String(), Input: origInput, Timestamp: time.Now(), err: err, Failed: err != nil, Error: errString, str: builder.String()}
+			return Result{URL: URL.String(), Input: origInput, Timestamp: time.Now(), Err: err, Failed: err != nil, Error: errString, str: builder.String()}
 		} else {
-			return Result{URL: URL.String(), Input: origInput, Timestamp: time.Now(), err: err}
+			return Result{URL: URL.String(), Input: origInput, Timestamp: time.Now(), Err: err}
 		}
 	}
 
@@ -1629,7 +1629,7 @@ retry:
 
 	parsed, err := r.parseURL(fullURL)
 	if err != nil {
-		return Result{URL: fullURL, Input: origInput, err: errors.Wrap(err, "could not parse url")}
+		return Result{URL: fullURL, Input: origInput, Err: errors.Wrap(err, "could not parse url")}
 	}
 
 	finalPort := parsed.Port()
@@ -1661,7 +1661,7 @@ retry:
 		Scheme:             parsed.Scheme,
 		Port:               finalPort,
 		Path:               finalPath,
-		raw:                resp.Raw,
+		Raw:                resp.Raw,
 		URL:                fullURL,
 		Input:              origInput,
 		ContentLength:      resp.ContentLength,
