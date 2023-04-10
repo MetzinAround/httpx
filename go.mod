@@ -43,7 +43,7 @@ require (
 	github.com/projectdiscovery/asnmap v1.0.2
 	github.com/projectdiscovery/dsl v0.0.3
 	github.com/projectdiscovery/fastdialer v0.0.24
-	github.com/projectdiscovery/mapcidr v1.1.0
+	github.com/projectdiscovery/mapcidr v1.1.1
 	github.com/projectdiscovery/ratelimit v0.0.6
 	github.com/projectdiscovery/tlsx v0.0.7
 	github.com/projectdiscovery/utils v0.0.19
